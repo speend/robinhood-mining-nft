@@ -283,3 +283,20 @@ epoch 轮换设计（平衡"防预计算"与"不作废在挖工作"）：
 ## B4. 不改动的部分
 
 Vault 365 天锁仓、Rewards 分配逻辑（含首质押者规则——如需调整属经济决策，单独报批）、CardNFT 铸造权限模型、Deploy 接线顺序。
+
+---
+
+# 附 C：自我拷问复审结果（2026-09-24，对抗性复审 + invariant 实证）
+
+复审在首次分析基础上**实证发现 2 个真 bug**（均已修复，见 baseline-original 分支 commit `f691997`）：
+
+| # | 严重度 | Bug | 证据 | 修复 |
+|---|---|---|---|---|
+| B1 | **High** | `Deploy.s.sol` owner 分离即失败：constructor 直接把 owner 设为 `OWNER`，之后 deployer 调 `setMinter`（onlyOwner）必 revert。而 `.env.example` 恰好建议填独立 OWNER → 推荐配置必炸；脚本内 `transferOwnership` 块成死代码 | `test/DeployScript.t.sol` 回归测试（修复前必现 revert） | constructor 先用 deployer，接线完成后 `transferOwnership` |
+| B2 | **Low**（但影响活性） | `Rewards.claim()` 精度尘埃锁死：`floor(x+d)-floor(x) ≤ d+1`，每个质押者每次分账的 pending 视图最多多计 1 wei；当所有人都领完，最后一人会因差几 wei 使 `call{value}` 失败 → **其全部 pending 永远无法领取** | invariant 实证抓到：`balance 0.896 ETH < obligations 0.896 ETH + 1 wei` | `claim()` 内 `amount = min(amount, balance)`，残余尘埃留在 claimable 不锁死 |
+
+复审同时澄清的**非问题**（已逐项排查）：first-staker 分支的 debt 计算顺序（符合设计）、`undistributed>0 ⇒ totalWeight==0` 恒成立、`pending()` 无下溢路径、`flushTreasury` 重入无窃取路径、`claim` 重入被 nonReentrant 阻断、`_safeMint` 回调抢质押已被"先分账后铸卡"防御。
+
+工程教训（测试侧 2 处自查修正）：① handler 中 `prank` 后内嵌 `currentMintDue()` 外部调用会消耗 prank，导致 mint 以 handler 身份执行（曾使 invariant 空转，mint 100% revert 而未触达真实状态）；② invariant 不加观测统计会把"全部 revert 的空跑"报告为通过——已验证修复后 mint 0 reverts。
+
+Baseline 最终状态：**49 tests / 6 suites 全部 PASS**（含 256 runs × 128k calls 的 invariant），ABI 已导出至 `deployments/abi/`。

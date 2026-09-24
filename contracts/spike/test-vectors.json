@@ -1,0 +1,40 @@
+{
+  "vectors": [
+    {
+      "name": "main-case",
+      "challenge": "0x00000000000000000000000000000000000000000000000000000000000000aa",
+      "user": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "nonce": "230690464",
+      "hash": "0x28aafdcb0e2a47cd5f4d3b7ffe3ca3924ec0ba8890cddd355269d76f00105fdf",
+      "validAt8": false,
+      "validAt16": false
+    },
+    {
+      "name": "all-zero",
+      "challenge": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "user": "0x0000000000000000000000000000000000000000",
+      "nonce": "0",
+      "hash": "0x2af357fc2ab2964b76482ec0fcac3b86f5aca1a8292676023c8b9ec392d821a0",
+      "validAt8": false,
+      "validAt16": false
+    },
+    {
+      "name": "max-nonce",
+      "challenge": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+      "user": "0xFFfFfFffFFfffFFfFFfFFFFFffFFFffffFfFFFfF",
+      "nonce": "18446744073709551615",
+      "hash": "0x85e7fa29e2e4ff0b70f1e9be614a046e00a965928a28f667368b871d555f8424",
+      "validAt8": false,
+      "validAt16": false
+    },
+    {
+      "name": "js-found-valid-8bits",
+      "challenge": "0x00000000000000000000000000000000000000000000000000000000000000aa",
+      "user": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "nonce": "127",
+      "hash": "0x0045a5273fe61874d9cbd1a7df022ecb88a3866938546293af31699809ff1f8c",
+      "validAt8": true,
+      "validAt16": false
+    }
+  ]
+}
