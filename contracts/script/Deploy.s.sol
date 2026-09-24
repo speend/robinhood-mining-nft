@@ -54,11 +54,14 @@ contract Deploy is Script {
         console.log("lockSeconds :", c.lockDuration);
 
         vm.startBroadcast(c.pk);
-        CardNFT nft = new CardNFT(c.nftName, c.nftSymbol, c.baseURI, c.owner);
-        Rewards rewards = new Rewards(c.owner);
-        Vault vault = new Vault(nft, rewards, c.lockDuration, c.owner);
+        // 部署期间 owner 必须是 deployer，否则后续 onlyOwner 接线会 revert；
+        // 全部接线完成后再移交给最终 owner。
+        address deployer = vm.addr(c.pk);
+        CardNFT nft = new CardNFT(c.nftName, c.nftSymbol, c.baseURI, deployer);
+        Rewards rewards = new Rewards(deployer);
+        Vault vault = new Vault(nft, rewards, c.lockDuration, deployer);
         Mine mine = new Mine(
-            nft, rewards, c.treasury, c.owner, c.baseBits, c.bitsPerTier, c.tierSize, c.startPrice, c.maxMints
+            nft, rewards, c.treasury, deployer, c.baseBits, c.bitsPerTier, c.tierSize, c.startPrice, c.maxMints
         );
 
         // 接线（三处都只能设一次，地址错会直接失败）
@@ -66,7 +69,7 @@ contract Deploy is Script {
         rewards.setMine(address(mine));
         rewards.setVault(address(vault));
 
-        if (c.owner != vm.addr(c.pk)) {
+        if (c.owner != deployer) {
             nft.transferOwnership(c.owner);
             rewards.transferOwnership(c.owner);
             vault.transferOwnership(c.owner);

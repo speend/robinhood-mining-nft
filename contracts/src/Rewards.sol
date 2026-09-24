@@ -98,7 +98,12 @@ contract Rewards is Ownable, ReentrancyGuard, IRewardsNotify, IRewardsWeight {
     function claim() external nonReentrant {
         _settle(msg.sender);
         uint256 amount = claimable[msg.sender];
-        claimable[msg.sender] = 0;
+        // 精度尘埃保护：pending() 的 floor 差可能使全体待领总额比余额多出几 wei
+        // （floor(x+d)-floor(x) ≤ d+1，每人每次分账最多多计 1 wei）。
+        // 不加这一行，最后一个领取者会因差 1 wei 永远 claim 失败（资金锁死）。
+        uint256 bal = address(this).balance;
+        if (amount > bal) amount = bal;
+        claimable[msg.sender] -= amount;
         if (amount > 0) {
             (bool ok,) = msg.sender.call{value: amount}("");
             if (!ok) revert TransferFailed();
