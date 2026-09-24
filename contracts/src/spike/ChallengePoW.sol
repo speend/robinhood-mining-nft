@@ -41,10 +41,10 @@ contract ChallengePoW {
     }
 
     /// @dev 种子来源：前一区块 blockhash + prevrandao。轮换发生前不可预知 → 无法预计算未来 challenge
+    ///      防御：创世块（block 0）没有前一区块，退化为 0（真实链不会遇到，本地链首块可能遇到）
     function _freshSeed(uint256 salt) internal view returns (uint256) {
-        return uint256(
-            keccak256(abi.encode(blockhash(block.number - 1), block.prevrandao, block.timestamp, salt))
-        );
+        bytes32 bh = block.number > 0 ? blockhash(block.number - 1) : bytes32(0);
+        return uint256(keccak256(abi.encode(bh, block.prevrandao, block.timestamp, salt)));
     }
 
     function _derive(uint256 epoch_, uint256 seed_) internal view returns (bytes32) {
