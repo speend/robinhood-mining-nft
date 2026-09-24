@@ -19,6 +19,8 @@ contract Deploy is Script {
         uint256 startPrice;
         uint256 maxMints;
         uint256 lockDuration;
+        uint256 epochDuration;
+        uint256 gracePeriod;
         string nftName;
         string nftSymbol;
         string baseURI;
@@ -35,6 +37,8 @@ contract Deploy is Script {
         c.startPrice = vm.envUint("START_PRICE_WEI");
         c.maxMints = vm.envOr("MAX_MINTS", uint256(5000));
         c.lockDuration = vm.envOr("LOCK_DURATION", uint256(365 days));
+        c.epochDuration = vm.envOr("EPOCH_DURATION", uint256(24 hours));
+        c.gracePeriod = vm.envOr("GRACE_PERIOD", uint256(10 minutes));
         c.nftName = vm.envOr("NFT_NAME", string("Mine Card"));
         c.nftSymbol = vm.envOr("NFT_SYMBOL", string("MCARD"));
         c.baseURI = vm.envOr("BASE_URI", string(""));
@@ -52,6 +56,8 @@ contract Deploy is Script {
         console.log("startPrice  :", c.startPrice);
         console.log("maxMints    :", c.maxMints);
         console.log("lockSeconds :", c.lockDuration);
+        console.log("epochSecs   :", c.epochDuration);
+        console.log("graceSecs   :", c.gracePeriod);
 
         vm.startBroadcast(c.pk);
         // 部署期间 owner 必须是 deployer，否则后续 onlyOwner 接线会 revert；
@@ -61,7 +67,17 @@ contract Deploy is Script {
         Rewards rewards = new Rewards(deployer);
         Vault vault = new Vault(nft, rewards, c.lockDuration, deployer);
         Mine mine = new Mine(
-            nft, rewards, c.treasury, deployer, c.baseBits, c.bitsPerTier, c.tierSize, c.startPrice, c.maxMints
+            nft,
+            rewards,
+            c.treasury,
+            deployer,
+            c.baseBits,
+            c.bitsPerTier,
+            c.tierSize,
+            c.startPrice,
+            c.maxMints,
+            c.epochDuration,
+            c.gracePeriod
         );
 
         // 接线（三处都只能设一次，地址错会直接失败）
@@ -105,5 +121,8 @@ contract Deploy is Script {
         require(Mine(mine).currentMintDue() == c.startPrice, "INIT FAIL: currentMintDue");
         require(Mine(mine).currentBits() == c.baseBits, "INIT FAIL: currentBits");
         require(Mine(mine).treasury() == c.treasury, "INIT FAIL: treasury");
+        require(Mine(mine).epochDuration() == c.epochDuration, "INIT FAIL: epochDuration");
+        require(Mine(mine).gracePeriod() == c.gracePeriod, "INIT FAIL: gracePeriod");
+        require(Mine(mine).currentChallenge() != bytes32(0), "INIT FAIL: challenge");
     }
 }

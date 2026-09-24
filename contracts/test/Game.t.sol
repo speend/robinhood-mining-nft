@@ -60,7 +60,7 @@ contract GameTest is Test {
         nft = new CardNFT("Mine Card", "MCARD", "ipfs://base/", owner);
         rewards = new Rewards(owner);
         vault = new Vault(nft, rewards, LOCK, owner);
-        mine = new Mine(nft, rewards, treasury, owner, BASE_BITS, BITS_PER_TIER, TIER_SIZE, START_PRICE, MAX_MINTS);
+        mine = new Mine(nft, rewards, treasury, owner, BASE_BITS, BITS_PER_TIER, TIER_SIZE, START_PRICE, MAX_MINTS, 24 hours, 10 minutes);
 
         vm.startPrank(owner);
         nft.setMinter(address(mine));
@@ -424,19 +424,19 @@ contract GameTest is Test {
 
     function test_Constructor_RejectsBadConfig() public {
         vm.expectRevert(Mine.BadConfig.selector);
-        new Mine(nft, rewards, treasury, owner, 0, 1, 500, 1 ether, 5000); // 难度为 0
+        new Mine(nft, rewards, treasury, owner, 0, 1, 500, 1 ether, 5000, 24 hours, 10 minutes); // 难度为 0
 
         vm.expectRevert(Mine.BadConfig.selector);
-        new Mine(nft, rewards, treasury, owner, 35, 1, 0, 1 ether, 5000); // 档位容量为 0
+        new Mine(nft, rewards, treasury, owner, 35, 1, 0, 1 ether, 5000, 24 hours, 10 minutes); // 档位容量为 0
 
         vm.expectRevert(Mine.BadConfig.selector);
-        new Mine(nft, rewards, treasury, owner, 200, 10, 500, 1 ether, 5000); // 难度会顶穿 256
+        new Mine(nft, rewards, treasury, owner, 200, 10, 500, 1 ether, 5000, 24 hours, 10 minutes); // 难度会顶穿 256
 
         vm.expectRevert(Mine.BadConfig.selector);
-        new Mine(nft, rewards, treasury, owner, 35, 1, 1, 1, 300); // 价格左移溢出
+        new Mine(nft, rewards, treasury, owner, 35, 1, 1, 1, 300, 24 hours, 10 minutes); // 价格左移溢出
 
         vm.expectRevert(Mine.BadConfig.selector);
-        new Mine(nft, rewards, address(0), owner, 35, 1, 500, 1 ether, 5000); // 零地址
+        new Mine(nft, rewards, address(0), owner, 35, 1, 500, 1 ether, 5000, 24 hours, 10 minutes); // 零地址
     }
 
     function test_Rewards_AccessControl() public {

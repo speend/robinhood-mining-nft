@@ -36,7 +36,7 @@ contract DeployScriptTest is Test {
         CardNFT nft = new CardNFT("Mine Card", "MCARD", "", deployer);
         Rewards rewards = new Rewards(deployer);
         Vault vault = new Vault(nft, rewards, 365 days, deployer);
-        Mine mine = new Mine(nft, rewards, treasury, deployer, 35, 1, 500, 0.00025 ether, 5000);
+        Mine mine = new Mine(nft, rewards, treasury, deployer, 35, 1, 500, 0.00025 ether, 5000, 24 hours, 10 minutes);
         nft.setMinter(address(mine));
         rewards.setMine(address(mine));
         rewards.setVault(address(vault));

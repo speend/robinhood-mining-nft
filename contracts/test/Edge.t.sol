@@ -33,7 +33,7 @@ contract EdgeTest is Test {
         nft = new CardNFT("Mine Card", "MCARD", "ipfs://base/", owner);
         rewards = new Rewards(owner);
         vault = new Vault(nft, rewards, LOCK, owner);
-        mine = new Mine(nft, rewards, treasury, owner, BASE_BITS, BITS_PER_TIER, TIER_SIZE, START_PRICE, MAX_MINTS);
+        mine = new Mine(nft, rewards, treasury, owner, BASE_BITS, BITS_PER_TIER, TIER_SIZE, START_PRICE, MAX_MINTS, 24 hours, 10 minutes);
 
         vm.startPrank(owner);
         nft.setMinter(address(mine));
@@ -183,12 +183,21 @@ contract EdgeTest is Test {
         mine.mint{value: pay}(n);
     }
 
-    /// @dev 钉死 hash 编码：isValidNonce 必须等于本地 keccak256(abi.encodePacked(user, nonce)) 的高 bits 判断
-    function testFuzz_IsValidNonce_MatchesLocalEncoding(address user, uint64 nonce, uint8 bits) public {
+    /// @dev 钉死 hash 编码（hardened-v1）：isValidForChallenge 必须等于
+    ///      本地 keccak256(abi.encodePacked(challenge, user, nonce)) 的高 bits 判断
+    function testFuzz_IsValidNonce_MatchesLocalEncoding(bytes32 ch, address user, uint64 nonce, uint8 bits) public {
         vm.assume(bits > 0 && bits <= 64);
-        bytes32 h = keccak256(abi.encodePacked(user, nonce));
+        bytes32 h = keccak256(abi.encodePacked(ch, user, nonce));
         bool expected = uint256(h) >> (256 - bits) == 0;
-        assertEq(mine.isValidNonce(user, nonce, bits), expected);
-        assertEq(mine.hashFor(user, nonce), h);
+        assertEq(mine.isValidForChallenge(ch, user, nonce, bits), expected);
+        assertEq(mine.hashFor(ch, user, nonce), h);
+    }
+
+    /// @dev isValidNonce(user, nonce, bits) 是"当前 challenge"的便捷视图
+    function testFuzz_IsValidNonce_UsesCurrentChallenge(address user, uint64 nonce) public {
+        assertEq(
+            mine.isValidNonce(user, nonce, 8),
+            mine.isValidForChallenge(mine.currentChallenge(), user, nonce, 8)
+        );
     }
 }

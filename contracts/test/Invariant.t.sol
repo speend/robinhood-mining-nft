@@ -30,7 +30,7 @@ contract RewardsHandler is Test {
         nft = new CardNFT("Mine Card", "MCARD", "", address(this));
         rewards = new Rewards(address(this));
         vault = new Vault(nft, rewards, LOCK, address(this));
-        mine = new Mine(nft, rewards, treasury, address(this), BASE_BITS, 0, TIER_SIZE, START_PRICE, MAX_MINTS);
+        mine = new Mine(nft, rewards, treasury, address(this), BASE_BITS, 0, TIER_SIZE, START_PRICE, MAX_MINTS, 24 hours, 10 minutes);
         nft.setMinter(address(mine));
         rewards.setMine(address(mine));
         rewards.setVault(address(vault));

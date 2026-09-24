@@ -1,24 +1,38 @@
 // ============================================================
-// keccak_miner.wgsl —— 与合约完全对齐的 Keccak-256 PoW 挖矿 shader
+// keccak_miner.wgsl (hardened-v1) —— Domain-Separated Challenge 版
+// 与 Mine.sol (hardened-v1) 完全对齐的 Keccak-256 PoW 挖矿 shader
 // ============================================================
 // 已验证：本 shader 的 keccak 实现与以太坊 keccak256 完全一致
 //         （内置自检：keccak256("") = c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470）
 //
-// 验证对象（必须与合约 Mine.isValidNonce 完全一致）：
-//   消息 = abi.encodePacked(玩家地址[20字节], nonce[uint64, 大端])，共 28 字节
-//   keccak256(消息) 的 32 字节结果，按【大端】当作 256 位整数，高 bits 位全为 0 即达标
+// 验证对象（必须与 Mine.isValidForChallenge 完全一致）：
+//   消息 = abi.encodePacked(challenge[32字节], 玩家地址[20字节], nonce[uint64, 大端])，共 60 字节
+//   keccak256(消息) 的 32 字节结果，按【大端】当作 256 位整数，高 bits 位全 0 即达标
 //
 // ⚠️ 字节序是最大的坑（务必看懂再改）：
-//   消息字节布局：b0..b19 = 地址；b20..b27 = nonce 大端；b28 = 0x01（keccak 填充）；b135 = 0x80
+//   消息字节布局：b0..b31 = challenge；b32..b51 = 地址；b52..b59 = nonce 大端；
+//                 b60 = 0x01（keccak 填充）；b135 = 0x80（结束标记）
+//   60 字节 < 136 字节 rate，单 block 吸收，无需多轮
 //   keccak 状态按 lane 组织，每 lane 覆盖 8 字节，lane 的 lo/hi 两个 u32 都是【小端】装载
 //   → 所以写入状态前要做 bswap32，读结果比较前也要做 bswap32
+//
+// 与 baseline 的唯一区别：消息前缀从 20B 地址变为 52B (challenge ‖ 地址)。
+// 测试向量：contracts/spike/test-vectors.json（集成时必须通过同向量自检）
 //
 // 用法：每次 dispatch 覆盖 stride * ITER 个 nonce，host 每轮把 nonce_lo/hi 前移；
 //       找到后 found 原子标志置 1，结果写在 result 里。
 // ============================================================
 
 struct Params {
-    addr0: u32,      // 地址前 4 字节（按十六进制字符串顺序解析出的 u32）
+    ch0: u32,        // challenge 字节 0..3（按十六进制字符串顺序解析出的 u32）
+    ch1: u32,        // 字节 4..7
+    ch2: u32,
+    ch3: u32,
+    ch4: u32,
+    ch5: u32,
+    ch6: u32,
+    ch7: u32,        // 字节 28..31
+    addr0: u32,      // 地址前 4 字节
     addr1: u32,      // 地址 4..7 字节
     addr2: u32,      // 地址 8..11 字节
     addr3: u32,      // 地址 12..15 字节
@@ -27,6 +41,9 @@ struct Params {
     nonce_hi: u32,   // 本批起始 nonce 的高 32 位
     bits: u32,       // 当前难度（从合约 currentBits() 读取）
     stride: u32,     // 本批总线程数（host 传入，等于 dispatch 的线程总数）
+    pad0: u32,       // uniform 16 字节对齐填充
+    pad1: u32,
+    pad2: u32,
 };
 
 @group(0) @binding(0) var<storage, read_write> found: atomic<u32>;
@@ -116,20 +133,28 @@ fn bswap32(x: u32) -> u32 {
         | ((x & 0xFF000000u) >> 24u);
 }
 
-/// 组装"地址(20B) + nonce(8B 大端) + 0x01 填充 + 0x80 结尾"的 28 字节消息状态
+/// 组装 "challenge(32B) + 地址(20B) + nonce(8B 大端) + 0x01 填充 + 0x80 结尾" 的 60 字节消息状态
 fn fill_state(st: ptr<function, array<u32, 50>>, nlo: u32, nhi: u32) {
     for (var i = 0u; i < 50u; i = i + 1u) {
         (*st)[i] = 0u;
     }
-    (*st)[0] = bswap32(p.addr0); // 地址字节 0..3
-    (*st)[1] = bswap32(p.addr1); // 字节 4..7
-    (*st)[2] = bswap32(p.addr2); // 字节 8..11
-    (*st)[3] = bswap32(p.addr3); // 字节 12..15
-    (*st)[4] = bswap32(p.addr4); // 字节 16..19
-    (*st)[5] = bswap32(nhi); // 字节 20..23：nonce 高 32 位（大端）
-    (*st)[6] = bswap32(nlo); // 字节 24..27：nonce 低 32 位（大端）
-    (*st)[7] = 1u; // 字节 28 = 0x01，keccak（非 SHA3）填充
-    (*st)[33] = 0x80000000u; // 字节 135 = 0x80
+    (*st)[0] = bswap32(p.ch0);   // challenge 字节 0..3
+    (*st)[1] = bswap32(p.ch1);   // 字节 4..7
+    (*st)[2] = bswap32(p.ch2);
+    (*st)[3] = bswap32(p.ch3);
+    (*st)[4] = bswap32(p.ch4);
+    (*st)[5] = bswap32(p.ch5);
+    (*st)[6] = bswap32(p.ch6);
+    (*st)[7] = bswap32(p.ch7);   // 字节 28..31
+    (*st)[8] = bswap32(p.addr0); // 地址字节 32..35（消息位置 32 = 地址开头）
+    (*st)[9] = bswap32(p.addr1);
+    (*st)[10] = bswap32(p.addr2);
+    (*st)[11] = bswap32(p.addr3);
+    (*st)[12] = bswap32(p.addr4); // 地址字节 48..51
+    (*st)[13] = bswap32(nhi);    // 字节 52..55：nonce 高 32 位（大端）
+    (*st)[14] = bswap32(nlo);    // 字节 56..59：nonce 低 32 位（大端）
+    (*st)[15] = 1u;              // 字节 60 = 0x01，keccak（非 SHA3）填充
+    (*st)[33] = 0x80000000u;     // 字节 135 = 0x80
 }
 
 /// 达标判断：结果按大端当 256 位整数，高 bits 位是否全 0（支持到 96 位，本项目最多 44 位）
