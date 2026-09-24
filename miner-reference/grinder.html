@@ -1,0 +1,191 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>BUSHU 挖矿参考实现</title>
+<style>
+  body { font-family: ui-monospace, Consolas, monospace; background:#111; color:#ddd; padding:20px; }
+  input, button { font: inherit; padding:6px 10px; background:#222; color:#ddd; border:1px solid #444; border-radius:4px; }
+  button { cursor:pointer; } button:hover { background:#333; }
+  #out { white-space:pre-wrap; margin-top:14px; line-height:1.6; }
+  .ok { color:#4ade80 } .err { color:#f87171 } .hl { color:#facc15 }
+</style>
+</head>
+<body>
+<h3>BUSHU 挖矿参考实现（WebGPU keccak256 PoW）</h3>
+<div>
+  钱包地址 <input id="addr" size="44" value="">
+  难度 bits <input id="bits" size="4" value="35">
+  <button id="start">开始挖矿</button>
+  <button id="stop">停止</button>
+</div>
+<pre id="out">初始化中…</pre>
+
+<script>
+const WGSL_URL = 'keccak_miner.wgsl';
+const THREADS = 1 << 20;          // 每轮线程数
+const ITER = 256;                 // 与 shader 里的 ITER 保持一致
+const WORKGROUP = 64;
+const EXPECT_EMPTY = 'c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470';
+
+const outEl = document.getElementById('out');
+const log = (...a) => {
+  const s = a.join(' ');
+  outEl.textContent += '\n' + s;
+  fetch('/log', { method:'POST', body:s }).catch(()=>{});
+};
+const report = (o) => fetch('/result', { method:'POST', body: JSON.stringify(o) }).catch(()=>{});
+
+function parseAddr(a) {
+  const h = a.replace(/^0x/i, '').padStart(40, '0');
+  return [0,1,2,3,4].map(i => parseInt(h.slice(i*8,(i+1)*8), 16) >>> 0);
+}
+function hexFromWords(w) {
+  let s = '';
+  for (let i = 0; i < 8; i++) {
+    const x = w[i];
+    s += (x & 255).toString(16).padStart(2,'0')
+      + ((x>>8)&255).toString(16).padStart(2,'0')
+      + ((x>>16)&255).toString(16).padStart(2,'0')
+      + ((x>>>24)&255).toString(16).padStart(2,'0');
+  }
+  return s;
+}
+
+let device, grindPipe, selfPipe, foundBuf, resultBuf, uniBuf, readBuf, strideBuf;
+let running = false;
+
+async function init() {
+  if (!navigator.gpu) throw new Error('浏览器不支持 WebGPU（请用 Chrome / Edge 新版）');
+  const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+  if (!adapter) throw new Error('没有找到 GPU');
+  device = await adapter.requestDevice();
+  device.addEventListener('uncapturederror', e => log('GPUERR ' + e.error.message));
+
+  const code = await (await fetch(WGSL_URL)).text();
+  const module = device.createShaderModule({ code });
+  const ci = await module.getCompilationInfo();
+  const errs = ci.messages.filter(m => m.type === 'error');
+  errs.forEach(m => log('WGSL 编译错误 L' + m.lineNum + ': ' + m.message));
+  if (errs.length) throw new Error('WGSL 编译失败');
+
+  foundBuf  = device.createBuffer({ size: 16, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST });
+  resultBuf = device.createBuffer({ size: 48, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC });
+  uniBuf    = device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+  readBuf   = device.createBuffer({ size: 256, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+
+  grindPipe = device.createComputePipeline({ layout:'auto', compute:{ module, entryPoint:'grind' } });
+  selfPipe  = device.createComputePipeline({ layout:'auto', compute:{ module, entryPoint:'selftest' } });
+  log('WebGPU 就绪');
+}
+
+// 自检：确认 shader 里的 keccak 实现与以太坊一致
+async function selftest() {
+  const bg = device.createBindGroup({
+    layout: selfPipe.getBindGroupLayout(0),
+    entries: [{ binding: 1, resource: { buffer: resultBuf } }],
+  });
+  const enc = device.createCommandEncoder();
+  const pass = enc.beginComputePass();
+  pass.setPipeline(selfPipe); pass.setBindGroup(0, bg); pass.dispatchWorkgroups(1); pass.end();
+  enc.copyBufferToBuffer(resultBuf, 0, readBuf, 0, 32);
+  device.queue.submit([enc.finish()]);
+  await readBuf.mapAsync(GPUMapMode.READ);
+  const words = new Uint32Array(readBuf.getMappedRange().slice(0, 32));
+  readBuf.unmap();
+  const hex = hexFromWords(words);
+  if (hex !== EXPECT_EMPTY) throw new Error('keccak 自检失败: ' + hex + '（应为 ' + EXPECT_EMPTY + '）');
+  log('keccak 自检通过 ✓ (keccak256("") 与以太坊官方值一致)');
+}
+
+async function grind(addr, bits) {
+  if (running) return;
+  running = true;
+  const [a0,a1,a2,a3,a4] = parseAddr(addr);
+  const strideBufLocal = new BigInt64Array(1);
+  let base = 0n;                    // 本轮起始 nonce（会在基础值上持续前进）
+  let totalHashes = 0n;
+  const t0 = performance.now();
+  const grindBg = device.createBindGroup({
+    layout: grindPipe.getBindGroupLayout(0),
+    entries: [
+      { binding: 0, resource: { buffer: foundBuf } },
+      { binding: 1, resource: { buffer: resultBuf } },
+      { binding: 2, resource: { buffer: uniBuf } },
+    ],
+  });
+
+  outEl.textContent += '\n开始挖矿：地址 ' + addr + '，难度 ' + bits + ' bits\n';
+
+  while (running) {
+    const lo = Number(base & 0xFFFFFFFFn), hi = Number((base >> 32n) & 0xFFFFFFFFn);
+    const params = new Uint32Array([a0,a1,a2,a3,a4, lo, hi, bits, THREADS, 0,0,0]);
+    device.queue.writeBuffer(uniBuf, 0, params);
+    device.queue.writeBuffer(foundBuf, 0, new Uint32Array([0]));
+
+    const enc = device.createCommandEncoder();
+    const pass = enc.beginComputePass();
+    pass.setPipeline(grindPipe); pass.setBindGroup(0, grindBg);
+    pass.dispatchWorkgroups(THREADS / WORKGROUP);
+    pass.end();
+    enc.copyBufferToBuffer(foundBuf, 0, readBuf, 0, 4);
+    enc.copyBufferToBuffer(resultBuf, 0, readBuf, 16, 48);
+    device.queue.submit([enc.finish()]);
+
+    await readBuf.mapAsync(GPUMapMode.READ);
+    const view = new Uint32Array(readBuf.getMappedRange().slice(0, 64));
+    readBuf.unmap();
+
+    totalHashes += BigInt(THREADS) * BigInt(ITER);
+    if (view[0] !== 0) {
+      const r = view.slice(4, 16); // 对应 result[0..11]
+      const nonce = (BigInt(r[9]) << 32n) | BigInt(r[8]);
+      const digest = hexFromWords(r.slice(0, 8));
+      const ms = performance.now() - t0;
+      const mhs = Number(totalHashes) / (ms / 1000) / 1e6;
+      outEl.textContent += '\n'
+        + '✅ 挖到了！\n'
+        + '  nonce    = ' + nonce.toString() + '  (0x' + nonce.toString(16) + ')\n'
+        + '  keccak   = ' + digest + '\n'
+        + '  尝试次数 = ' + totalHashes.toString() + '\n'
+        + '  耗时     = ' + (ms/1000).toFixed(1) + ' 秒，平均算力 ' + mhs.toFixed(0) + ' MH/s\n'
+        + '  （下一步：把这笔 nonce 交给合约 mint，合约会用同一规则再验一遍）';
+      report({ ok: true, nonce: nonce.toString(), nonceHex: '0x'+nonce.toString(16), digest, bits, addr,
+               hashes: totalHashes.toString(), ms: Math.round(ms), mhs: Number(mhs.toFixed(1)) });
+      running = false;
+      return;
+    }
+    base += BigInt(THREADS) * BigInt(ITER);
+    const ms = performance.now() - t0;
+    if (ms > 500) {
+      const mhs = Number(totalHashes) / (ms / 1000) / 1e6;
+      outEl.textContent = outEl.textContent.replace(/\n\[进度\].*$/, '')
+        + '\n[进度] ' + (ms/1000).toFixed(0) + 's  已尝试 ' + (totalHashes/1000000n) + 'M 次  算力 ' + mhs.toFixed(0) + ' MH/s';
+    }
+  }
+}
+
+(async () => {
+  try {
+    await init();
+    await selftest();
+    const q = new URLSearchParams(location.search);
+    const qAddr = q.get('addr'), qBits = parseInt(q.get('bits') || '35');
+    if (qAddr) document.getElementById('addr').value = qAddr;
+    document.getElementById('bits').value = qBits;
+    document.getElementById('start').onclick = () => {
+      const a = document.getElementById('addr').value.trim();
+      const b = parseInt(document.getElementById('bits').value);
+      if (!/^0x[0-9a-fA-F]{40}$/.test(a)) { alert('地址格式不对'); return; }
+      grind(a, b);
+    };
+    document.getElementById('stop').onclick = () => { running = false; };
+    if (q.get('auto') === '1' && qAddr) grind(qAddr, qBits);
+  } catch (e) {
+    log('ERR ' + e.message);
+    report({ error: String(e.message || e) });
+  }
+})();
+</script>
+</body>
+</html>
