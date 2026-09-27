@@ -1,6 +1,14 @@
 /** @type {import('next').NextConfig} */
+// GitHub Pages 项目站点：https://<user>.github.io/<repo>/ —— 构建时设 BASE_PATH=/<repo>
+// 本地/自定义域名留空即可。静态导出到 web/out。
+const basePath = process.env.BASE_PATH || '';
+
 const nextConfig = {
   reactStrictMode: true,
+  output: 'export',
+  basePath,
+  assetPrefix: basePath || undefined,
+  images: { unoptimized: true },
   webpack: (config, { webpack }) => {
     // WalletConnect / pino 拉入 node-only 模块，浏览器 bundle 中屏蔽
     config.resolve.fallback = { ...config.resolve.fallback, fs: false, net: false, tls: false };

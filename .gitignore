@@ -14,3 +14,10 @@ dist/
 Thumbs.db
 # archives
 contracts.zip
+
+# local scratch / testnet throwaway wallets
+.tmp_*/
+contracts/broadcast-archive-osaka/
+
+# 本地前端网络选择标记（sync-deployment.mjs 读取）
+web/.deployment

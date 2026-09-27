@@ -1,0 +1,40 @@
+{
+  "network": "robinhood-testnet",
+  "chainId": 46630,
+  "rpcUrl": "https://rpc.testnet.chain.robinhood.com",
+  "explorer": "https://explorer.testnet.chain.robinhood.com",
+  "deployedAt": "2026-09-26T17:16:01.775Z",
+  "commitHash": "cbfc1b1d633a1d92e50f283ba46f322c61d71215",
+  "blockNumber": 124725956,
+  "config": {
+    "baseBits": 35,
+    "bitsPerTier": 1,
+    "tierSize": 500,
+    "startPriceWei": "250000000000000",
+    "maxMints": 5000,
+    "lockDuration": 31536000,
+    "epochDuration": 86400,
+    "gracePeriod": 600
+  },
+  "deployer": "0x37db61af355ba0612326d3a93c509f2b7c2d7c30",
+  "owner": "0x37db61af355ba0612326d3a93c509f2b7c2d7c30",
+  "treasury": "0x37db61aF355bA0612326d3a93C509f2b7c2D7C30",
+  "contracts": {
+    "CardNFT": {
+      "address": "0xd90a29d4af4dc0395c5ff3059406d0c92da3ea62",
+      "txHash": "0x83e08e8b4c91d9f72eda3a3e9c8b0ff699d27a21f107fa4e39527e0e2d85aaac"
+    },
+    "Rewards": {
+      "address": "0xcffa10acab59840b062ccfb6deb58af2dc052dd0",
+      "txHash": "0x911b67090c34567892baa55cd11fe4e48e9328eebcbb757ac005b95603b4f750"
+    },
+    "Vault": {
+      "address": "0x51988fedd4ee1a5aa51995f5d0f11fcd6979683e",
+      "txHash": "0xe82db6f9da054c0915782a421a2f0a77bcc1b923213168bf17db682f4f88bf7b"
+    },
+    "Mine": {
+      "address": "0xf6d8abc92587ddaf800b34ee89c0b19b825e906a",
+      "txHash": "0x386c30440950fbcc2b06121f4bc8f86deddd2726216b7cc0714ba963ee6e84d5"
+    }
+  }
+}

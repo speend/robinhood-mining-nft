@@ -10,7 +10,18 @@ import deployment from './deployment.json';
  * 对应的合约地址，否则回退到 anvil 部署地址，仅适合本地联调）。
  */
 
-const env = process.env;
+// 注意：必须是直接属性访问，Next.js 只内联 process.env.FOO 字面引用；
+// 别名（const env = process.env）会把 process 留到浏览器运行时导致 ReferenceError。
+const env = {
+  NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID,
+  NEXT_PUBLIC_RPC_URL: process.env.NEXT_PUBLIC_RPC_URL,
+  NEXT_PUBLIC_EXPLORER_URL: process.env.NEXT_PUBLIC_EXPLORER_URL,
+  NEXT_PUBLIC_MINE_ADDRESS: process.env.NEXT_PUBLIC_MINE_ADDRESS,
+  NEXT_PUBLIC_NFT_ADDRESS: process.env.NEXT_PUBLIC_NFT_ADDRESS,
+  NEXT_PUBLIC_VAULT_ADDRESS: process.env.NEXT_PUBLIC_VAULT_ADDRESS,
+  NEXT_PUBLIC_REWARDS_ADDRESS: process.env.NEXT_PUBLIC_REWARDS_ADDRESS,
+  NEXT_PUBLIC_WC_PROJECT_ID: process.env.NEXT_PUBLIC_WC_PROJECT_ID,
+};
 
 const parsedChainId = Number(env.NEXT_PUBLIC_CHAIN_ID ?? deployment.chainId);
 if (parsedChainId !== anvilLocal.id && parsedChainId !== robinhoodTestnet.id) {

@@ -5,7 +5,8 @@
  * hash 展示格式。
  */
 
-export const WGSL_URL = '/miner/keccak_miner.wgsl';
+// GitHub Pages 项目站点部署在 /<repo>/ 子路径下，构建时通过 NEXT_PUBLIC_BASE_PATH 注入
+export const WGSL_URL = `${process.env.NEXT_PUBLIC_BASE_PATH ?? ''}/miner/keccak_miner.wgsl`;
 export const THREADS = 1 << 20; // 每轮 dispatch 线程数
 export const ITER = 256; // 与 shader 里的 ITER 保持一致
 export const WORKGROUP_SIZE = 64; // 与 shader @workgroup_size(64) 一致

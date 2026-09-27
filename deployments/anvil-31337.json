@@ -1,11 +1,11 @@
 {
-  "network": "anvil-local",
+  "network": "anvil-31337",
   "chainId": 31337,
   "rpcUrl": "http://127.0.0.1:8545",
   "explorer": null,
-  "deployedAt": "2026-09-24T08:19:39.214Z",
-  "commitHash": "a488c0dcbcce1a41def72bfa27927ef154ea0d13",
-  "note": "TEST ONLY: BASE_BITS=8 (生产为 35)，仅用于本地开发联调",
+  "deployedAt": "2026-09-27T11:18:16.849Z",
+  "commitHash": "cbfc1b1d633a1d92e50f283ba46f322c61d71215",
+  "blockNumber": 1,
   "config": {
     "baseBits": 8,
     "bitsPerTier": 1,
@@ -22,19 +22,20 @@
   "contracts": {
     "CardNFT": {
       "address": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
-      "txHash": "0xeb76b3ee8af44c4410008cbfcc18089c5ddf8dec1d29e83fb656e5778b568b56"
+      "txHash": "0x1b792e8d03cce99e04f59d53308c6dac69d72e5a7b5fc546f52c79e3f3cfcdfe"
     },
     "Rewards": {
       "address": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
-      "txHash": "0xe79426555f12cdcb740ce12dbc3f33ba85ff00654801a0c5edefa4cf15b77ff1"
+      "txHash": "0x040a04b2fe0cd8ed0839d3224142ea2c4b0314c12b83e2d68ef286cbe088274b"
     },
     "Vault": {
       "address": "0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0",
-      "txHash": "0x58ec7341c877ddb0f029e8af81faa6d11bd066992d7a24b08a75cb786ce744e4"
+      "txHash": "0x1ffa1892e7a7dbd689ee7cf0d2aac7a299fb4624c04f8de7f5cb88ad00bb2b62"
     },
     "Mine": {
       "address": "0xcf7ed3acca5a467e9e704c703e8d87f634fb0fc9",
-      "txHash": "0xd67d8c02911c618f809f141adbcebe119e02b17f48641a9995d047b42086df65"
+      "txHash": "0x03ac7012b5b20ec17b8f5b00b1028682fba1688b4396e4436dfa04ad9e9262ad"
     }
-  }
+  },
+  "note": "TEST ONLY: BASE_BITS=8（生产为 35），仅用于本地开发联调"
 }
